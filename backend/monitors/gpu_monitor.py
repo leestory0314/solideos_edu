@@ -1,113 +1,67 @@
-import platform
+import GPUtil
+import wmi
+import pythoncom
 
 class GPUMonitor:
-    """GPU 사용량 및 온도 모니터링"""
-    
     def __init__(self):
-        self.gpu_available = False
-        self.gpu_type = None
-        self._check_gpu_support()
-    
-    def _check_gpu_support(self):
-        """GPU 모니터링 지원 여부 확인"""
+        self.wmi = None
+        # 초기화 시 WMI 시도해봄 (에러나면 무시)
         try:
-            import GPUtil
-            gpus = GPUtil.getGPUs()
-            if gpus:
-                self.gpu_available = True
-                self.gpu_type = "NVIDIA"
-        except Exception:
+            pythoncom.CoInitialize()
+            self.wmi = wmi.WMI()
+        except:
             pass
+
+    def get_all(self) -> dict:
+        gpus_info = []
         
-        if not self.gpu_available:
-            try:
-                if platform.system() == "Windows":
-                    import wmi
-                    self.wmi = wmi.WMI(namespace="root\\OpenHardwareMonitor")
-                    sensors = self.wmi.Sensor()
-                    for sensor in sensors:
-                        if "GPU" in sensor.Name:
-                            self.gpu_available = True
-                            self.gpu_type = "OpenHardwareMonitor"
-                            break
-            except Exception:
-                pass
-    
-    def get_nvidia_info(self) -> list:
-        """NVIDIA GPU 정보 반환"""
+        # 1. NVIDIA GPU 시도 (GPUtil)
         try:
-            import GPUtil
-            gpus = GPUtil.getGPUs()
-            gpu_list = []
-            
-            for gpu in gpus:
-                gpu_list.append({
+            nvidia_gpus = GPUtil.getGPUs()
+            for gpu in nvidia_gpus:
+                gpus_info.append({
                     "id": gpu.id,
                     "name": gpu.name,
                     "load": gpu.load * 100,
-                    "memory": {
-                        "total": gpu.memoryTotal,
-                        "used": gpu.memoryUsed,
-                        "free": gpu.memoryFree,
-                        "percent": (gpu.memoryUsed / gpu.memoryTotal * 100) if gpu.memoryTotal > 0 else 0
-                    },
-                    "temperature": gpu.temperature,
-                    "driver": gpu.driver
+                    "memory_total": gpu.memoryTotal,
+                    "memory_used": gpu.memoryUsed,
+                    "temperature": gpu.temperature
                 })
-            
-            return gpu_list
         except Exception:
-            return []
-    
-    def get_ohm_info(self) -> list:
-        """OpenHardwareMonitor를 통한 GPU 정보 반환"""
-        try:
-            if not hasattr(self, 'wmi'):
-                import wmi
-                self.wmi = wmi.WMI(namespace="root\\OpenHardwareMonitor")
-            
-            sensors = self.wmi.Sensor()
-            gpu_data = {
-                "id": 0,
-                "name": "GPU",
-                "load": 0,
-                "memory": {"total": 0, "used": 0, "free": 0, "percent": 0},
-                "temperature": 0,
-                "driver": "N/A"
-            }
-            
-            for sensor in sensors:
-                if "GPU" in sensor.Name:
-                    if sensor.SensorType == "Load" and "Core" in sensor.Name:
-                        gpu_data["load"] = sensor.Value
-                    elif sensor.SensorType == "Temperature":
-                        gpu_data["temperature"] = sensor.Value
-                    elif sensor.SensorType == "SmallData" and "Memory" in sensor.Name:
-                        if "Used" in sensor.Name:
-                            gpu_data["memory"]["used"] = sensor.Value
-                        elif "Total" in sensor.Name:
-                            gpu_data["memory"]["total"] = sensor.Value
-            
-            if gpu_data["memory"]["total"] > 0:
-                gpu_data["memory"]["percent"] = (gpu_data["memory"]["used"] / gpu_data["memory"]["total"]) * 100
-                gpu_data["memory"]["free"] = gpu_data["memory"]["total"] - gpu_data["memory"]["used"]
-            
-            return [gpu_data]
-        except Exception:
-            return []
-    
-    def get_all(self) -> dict:
-        """모든 GPU 정보 반환"""
-        gpus = []
-        
-        if self.gpu_available:
-            if self.gpu_type == "NVIDIA":
-                gpus = self.get_nvidia_info()
-            elif self.gpu_type == "OpenHardwareMonitor":
-                gpus = self.get_ohm_info()
-        
+            pass
+
+        # 2. NVIDIA를 못 찾았다면 WMI로 시도 (Intel/AMD)
+        if not gpus_info:
+            try:
+                # 스레드별 COM 초기화 필요
+                pythoncom.CoInitialize()
+                w = wmi.WMI()
+                
+                for i, gpu in enumerate(w.Win32_VideoController()):
+                    # 불필요한 어댑터 제외
+                    if "Remote" in gpu.Name or "Virtual" in gpu.Name: continue
+                    
+                    # 메모리나 로드율 정보를 얻기 어려우므로 기본값 처리
+                    try:
+                        # AdapterRAM은 바이트 단위 -> MB 변환
+                        mem_total = int(gpu.AdapterRAM) / (1024**2) if gpu.AdapterRAM else 0
+                    except:
+                        mem_total = 0
+                        
+                    gpus_info.append({
+                        "id": i,
+                        "name": gpu.Name,
+                        "load": 0, # Load율 수집 불가 (0%)
+                        "memory_total": mem_total,
+                        "memory_used": 0,
+                        "temperature": 0 # 온도 수집 불가
+                    })
+            except Exception as e:
+                # WMI 에러 시 무시
+                pass
+
         return {
-            "available": self.gpu_available,
-            "type": self.gpu_type,
-            "gpus": gpus
+            "available": len(gpus_info) > 0,
+            "count": len(gpus_info),
+            "gpus": gpus_info
         }
