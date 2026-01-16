@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Real-time system resource monitoring dashboard with CPU, GPU, Memory, Disk, and Network tracking">
+    <title>System Resource Monitor | Real-time Dashboard</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="stylesheet" href="/static/css/process_list.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-left">
+                <div class="logo">
+                    <i data-lucide="activity" class="logo-icon"></i>
+                    <h1>System Monitor</h1>
+                </div>
+                <span class="version-badge">v1.0</span>
+            </div>
+            <div class="header-right">
+                <div class="connection-status" id="connectionStatus">
+                    <span class="status-dot"></span>
+                    <span class="status-text">Connecting...</span>
+                </div>
+                <button class="btn btn-primary" id="startMonitoringBtn">
+                    <i data-lucide="play"></i>
+                    <span>Start 5min Monitoring</span>
+                </button>
+                <button class="btn btn-secondary" id="reportsBtn">
+                    <i data-lucide="file-text"></i>
+                    <span>Reports</span>
+                </button>
+            </div>
+        </header>
+
+        <!-- Monitoring Progress Bar -->
+        <div class="monitoring-bar" id="monitoringBar">
+            <div class="monitoring-info">
+                <i data-lucide="clock"></i>
+                <span id="monitoringStatus">Monitoring in progress...</span>
+            </div>
+            <div class="progress-container">
+                <div class="progress-bar" id="progressBar"></div>
+            </div>
+            <div class="monitoring-timer">
+                <span id="timerDisplay">05:00</span>
+                <button class="btn btn-danger btn-sm" id="stopMonitoringBtn">
+                    <i data-lucide="square"></i>
+                    Stop
+                </button>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Overview Cards -->
+            <section class="cards-grid">
+                <!-- CPU Card -->
+                <div class="card" id="cpuCard">
+                    <div class="card-header">
+                        <div class="card-icon cpu">
+                            <i data-lucide="cpu"></i>
+                        </div>
+                        <div class="card-title">
+                            <h3>CPU</h3>
+                            <span class="card-subtitle" id="cpuCores">- cores</span>
+                        </div>
+                        <div class="card-status" id="cpuStatus">
+                            <span class="status-badge normal">Normal</span>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="metric-main">
+                            <span class="metric-value" id="cpuUsage">0</span>
+                            <span class="metric-unit">%</span>
+                        </div>
+                        <div class="metric-secondary">
+                            <div class="metric-item">
+                                <i data-lucide="thermometer"></i>
+                                <span id="cpuTemp">--</span>
+                                <span class="metric-label">°C</span>
+                            </div>
+                            <div class="metric-item">
+                                <i data-lucide="zap"></i>
+                                <span id="cpuFreq">--</span>
+                                <span class="metric-label">MHz</span>
+                            </div>
+                        </div>
+                        <div class="progress-ring-container">
+                            <svg class="progress-ring" viewBox="0 0 100 100">
+                                <circle class="progress-ring-bg" cx="50" cy="50" r="40"></circle>
+                                <circle class="progress-ring-fill" id="cpuRing" cx="50" cy="50" r="40"></circle>
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- GPU Card -->
+                <div class="card" id="gpuCard">
+                    <div class="card-header">
+                        <div class="card-icon gpu">
+                            <i data-lucide="monitor"></i>
+                        </div>
+                        <div class="card-title">
+                            <h3>GPU</h3>
+                            <span class="card-subtitle" id="gpuName">Detecting...</span>
+                        </div>
+                        <div class="card-status" id="gpuStatus">
+                            <span class="status-badge normal">Normal</span>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="metric-main">
+                            <span class="metric-value" id="gpuUsage">0</span>
+                            <span class="metric-unit">%</span>
+                        </div>
+                        <div class="metric-secondary">
+                            <div class="metric-item">
+                                <i data-lucide="thermometer"></i>
+                                <span id="gpuTemp">--</span>
+                                <span class="metric-label">°C</span>
+                            </div>
+                            <div class="metric-item">
+                                <i data-lucide="database"></i>
+                                <span id="gpuMemory">--</span>
+                                <span class="metric-label">MB</span>
+                            </div>
+                        </div>
+                        <div class="progress-ring-container">
+                            <svg class="progress-ring" viewBox="0 0 100 100">
+                                <circle class="progress-ring-bg" cx="50" cy="50" r="40"></circle>
+                                <circle class="progress-ring-fill" id="gpuRing" cx="50" cy="50" r="40"></circle>
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Memory Card -->
+                <div class="card" id="memoryCard">
+                    <div class="card-header">
+                        <div class="card-icon memory">
+                            <i data-lucide="database"></i>
+                        </div>
+                        <div class="card-title">
+                            <h3>Memory</h3>
+                            <span class="card-subtitle" id="memoryTotal">-- GB Total</span>
+                        </div>
+                        <div class="card-status" id="memoryStatus">
+                            <span class="status-badge normal">Normal</span>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="metric-main">
+                            <span class="metric-value" id="memoryUsage">0</span>
+                            <span class="metric-unit">%</span>
+                        </div>
+                        <div class="metric-secondary">
+                            <div class="metric-item">
+                                <i data-lucide="hard-drive"></i>
+                                <span id="memoryUsed">--</span>
+                                <span class="metric-label">GB Used</span>
+                            </div>
+                            <div class="metric-item">
+                                <i data-lucide="box"></i>
+                                <span id="memoryFree">--</span>
+                                <span class="metric-label">GB Free</span>
+                            </div>
+                        </div>
+                        <div class="progress-ring-container">
+                            <svg class="progress-ring" viewBox="0 0 100 100">
+                                <circle class="progress-ring-bg" cx="50" cy="50" r="40"></circle>
+                                <circle class="progress-ring-fill" id="memoryRing" cx="50" cy="50" r="40"></circle>
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Network Card -->
+                <div class="card" id="networkCard">
+                    <div class="card-header">
+                        <div class="card-icon network">
+                            <i data-lucide="wifi"></i>
+                        </div>
+                        <div class="card-title">
+                            <h3>Network</h3>
+                            <span class="card-subtitle" id="networkConnections">-- connections</span>
+                        </div>
+                        <div class="card-status" id="networkStatus">
+                            <span class="status-badge normal">Active</span>
+                        </div>
+                    </div>
+                    <div class="card-body network-body">
+                        <div class="network-stats">
+                            <div class="network-stat upload">
+                                <div class="stat-icon">
+                                    <i data-lucide="arrow-up"></i>
+                                </div>
+                                <div class="stat-info">
+                                    <span class="stat-label">Upload</span>
+                                    <span class="stat-value" id="uploadSpeed">0 B/s</span>
+                                </div>
+                            </div>
+                            <div class="network-stat download">
+                                <div class="stat-icon">
+                                    <i data-lucide="arrow-down"></i>
+                                </div>
+                                <div class="stat-info">
+                                    <span class="stat-label">Download</span>
+                                    <span class="stat-value" id="downloadSpeed">0 B/s</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="network-total">
+                            <div class="total-item">
+                                <span class="total-label">Total Sent</span>
+                                <span class="total-value" id="totalSent">0 B</span>
+                            </div>
+                            <div class="total-item">
+                                <span class="total-label">Total Received</span>
+                                <span class="total-value" id="totalReceived">0 B</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Charts Section -->
+            <section class="charts-section">
+                <!-- CPU Chart & Processes -->
+                <div class="chart-card">
+                    <div class="chart-header">
+                        <h3>
+                            <i data-lucide="cpu"></i>
+                            CPU Usage History
+                        </h3>
+                        <div class="chart-legend">
+                            <span class="legend-item"><span class="legend-color cpu"></span>CPU %</span>
+                        </div>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="cpuChart"></canvas>
+                    </div>
+                    <!-- Top Processes -->
+                    <div class="process-list-container">
+                        <h4>Top 5 Processes</h4>
+                        <div class="process-table-wrapper">
+                            <table class="process-table" id="cpuProcessTable">
+                                <thead>
+                                    <tr>
+                                        <th>Name</th>
+                                        <th>PID</th>
+                                        <th class="text-right">%</th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Memory Chart & Processes -->
+                <div class="chart-card">
+                    <div class="chart-header">
+                        <h3>
+                            <i data-lucide="database"></i>
+                            Memory Usage History
+                        </h3>
+                        <div class="chart-legend">
+                            <span class="legend-item"><span class="legend-color memory"></span>Memory %</span>
+                        </div>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="memoryChart"></canvas>
+                    </div>
+                    <!-- Top Processes -->
+                    <div class="process-list-container">
+                        <h4>Top 5 Processes</h4>
+                        <div class="process-table-wrapper">
+                            <table class="process-table" id="memoryProcessTable">
+                                <thead>
+                                    <tr>
+                                        <th>Name</th>
+                                        <th>PID</th>
+                                        <th class="text-right">%</th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Network Chart -->
+                <div class="chart-card full-width">
+                    <div class="chart-header">
+                        <h3>
+                            <i data-lucide="activity"></i>
+                            Network Traffic
+                        </h3>
+                        <div class="chart-legend">
+                            <span class="legend-item"><span class="legend-color upload"></span>Upload</span>
+                            <span class="legend-item"><span class="legend-color download"></span>Download</span>
+                        </div>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="networkChart"></canvas>
+                    </div>
+                     <!-- Top Network Processes -->
+                    <div class="process-list-container">
+                        <h4>Top 5 Processes (by Active Connections)</h4>
+                        <div class="process-table-wrapper">
+                            <table class="process-table" id="networkProcessTable">
+                                <thead>
+                                    <tr>
+                                        <th>Name</th>
+                                        <th>PID</th>
+                                        <th class="text-right">Conns</th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Disk Section -->
+            <section class="disk-section">
+                <div class="section-header">
+                    <h2>
+                        <i data-lucide="hard-drive"></i>
+                        Disk Usage
+                    </h2>
+                </div>
+                <!-- Disk Grid -->
+                <div class="disk-grid" id="diskGrid" style="margin-bottom: var(--space-5);">
+                    <!-- Disk cards will be dynamically generated -->
+                </div>
+                
+                <!-- Top Disk Processes -->
+                 <div class="process-list-container" style="border-top: 1px solid rgba(255,255,255,0.1);">
+                    <h4>Top 5 Processes (by Disk I/O MB)</h4>
+                    <div class="process-table-wrapper">
+                        <table class="process-table" id="diskProcessTable">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>PID</th>
+                                    <th class="text-right">Total I/O (MB)</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- Reports Modal -->
+        <div class="modal" id="reportsModal">
+            <div class="modal-overlay"></div>
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>
+                        <i data-lucide="file-text"></i>
+                        Generated Reports
+                    </h2>
+                    <button class="modal-close" id="closeReportsBtn">
+                        <i data-lucide="x"></i>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div class="reports-list" id="reportsList">
+                        <!-- Reports will be dynamically generated -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Toast Notification -->
+        <div class="toast-container" id="toastContainer"></div>
+    </div>
+
+    <script src="/static/js/charts.js"></script>
+    <script src="/static/js/websocket.js"></script>
+    <script src="/static/js/main.js"></script>
+</body>
+</html>
