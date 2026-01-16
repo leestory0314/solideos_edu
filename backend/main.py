@@ -69,16 +69,109 @@ class ConnectionManager:
             except Exception:
                 pass
 
+
 manager = ConnectionManager()
+
+import threading
+import copy
+
+# 전역 데이터 저장소
+system_data_lock = threading.Lock()
+latest_system_data = {
+    "cpu": None, "gpu": None, "memory": None, "disk": None, 
+    "network": None, "processes": None, "timestamp": None
+}
+
+class BackgroundMonitor:
+    def __init__(self):
+        self.running = False
+        self.thread = None
+
+    def start(self):
+        self.running = True
+        self.thread = threading.Thread(target=self._loop, daemon=True)
+        self.thread.start()
+
+    def stop(self):
+        self.running = False
+        if self.thread:
+            self.thread.join(timeout=2)
+
+    def _loop(self):
+        """데이터 수집 루프"""
+        global latest_system_data
+        last_process_time = 0
+        
+        while self.running:
+            try:
+                now = time.time()
+                
+                # 1. 가벼운 시스템 메트릭 (매초 수집)
+                cpu = cpu_monitor.get_all()
+                mem = memory_monitor.get_all()
+                net = network_monitor.get_all()
+                
+                # 2. 약간 무거운 메트릭 (GPU, Disk - 매초 수집하되 에러 무시)
+                try:
+                    gpu = gpu_monitor.get_all()
+                except: gpu = None
+                    
+                try:
+                   disk = disk_monitor.get_all()
+                except: disk = None
+
+                # 3. 매우 무거운 프로세스 목록 (3초 주기)
+                processes = latest_system_data["processes"]
+                if now - last_process_time >= 3.0 or processes is None:
+                    try:
+                        # 오버헤드가 큰 작업
+                        processes = process_monitor.get_all(limit=5)
+                        last_process_time = now
+                    except Exception as e:
+                        print(f"Process monitor error: {e}")
+                        if processes is None: processes = {}
+
+                # 데이터 업데이트
+                payload = {
+                    "timestamp": datetime.now().isoformat(),
+                    "cpu": cpu,
+                    "gpu": gpu,
+                    "memory": mem,
+                    "disk": disk,
+                    "network": net,
+                    "processes": processes
+                }
+                
+                with system_data_lock:
+                    latest_system_data = payload
+                    
+            except Exception as e:
+                print(f"Monitor loop error: {e}")
+            
+            # CPU 부하 조절을 위한 슬립
+            time.sleep(1.0)
+
+monitor_runner = BackgroundMonitor()
+
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
     print("[*] System Resource Monitor Server Starting...")
     print(f"[*] Platform: {platform.system()} {platform.release()}")
-    print(f"[*] Open http://localhost:8000 in your browser")
+    
+    # 모니터링 스레드 시작
+    print("[*] Starting Background Monitor...")
+    monitor_runner.start()
+    
+    # Static 파일 서빙 (lifespan 내에서 처리하지 않고 app 생성 후 mount 권장하지만 여기서도 가능)
+    
     yield
+    
     # Shutdown
+    print("[*] Stopping Background Monitor...")
+    monitor_runner.stop()
     print("[*] Server shutting down...")
 
 app = FastAPI(
@@ -102,42 +195,12 @@ frontend_path = os.path.join(os.path.dirname(__file__), "..", "frontend")
 if os.path.exists(frontend_path):
     app.mount("/static", StaticFiles(directory=frontend_path), name="static")
 
-# 전역 변수로 마지막 프로세스 업데이트 시간과 캐시 데이터 저장
-last_process_update = 0
-cached_process_data = None
+
 
 def get_system_data() -> dict:
-    """모든 시스템 데이터 수집"""
-    global last_process_update, cached_process_data
-    
-    current_time = time.time()
-    
-    # 기본 메트릭은 매번 수집 (가벼움)
-    cpu_data = cpu_monitor.get_all()
-    gpu_data = gpu_monitor.get_all()
-    memory_data = memory_monitor.get_all()
-    disk_data = disk_monitor.get_all()
-    network_data = network_monitor.get_all()
-    
-    # 프로세스 데이터는 3초마다 갱신 (무거움)
-    if current_time - last_process_update >= 3.0 or cached_process_data is None:
-        try:
-            cached_process_data = process_monitor.get_all(limit=5)
-            last_process_update = current_time
-        except Exception:
-            # 에러 발생 시 이전 데이터 유지하거나 빈 값
-            if cached_process_data is None:
-                cached_process_data = {}
-    
-    return {
-        "timestamp": datetime.now().isoformat(),
-        "cpu": cpu_data,
-        "gpu": gpu_data,
-        "memory": memory_data,
-        "disk": disk_data,
-        "network": network_data,
-        "processes": cached_process_data
-    }
+    """캐시된 최신 시스템 데이터 반환 (Non-blocking)"""
+    with system_data_lock:
+        return copy.deepcopy(latest_system_data)
 
 def get_system_info() -> dict:
     """시스템 정보 반환"""
