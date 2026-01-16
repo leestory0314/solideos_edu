@@ -24,6 +24,9 @@ network_monitor = NetworkMonitor()
 process_monitor = ProcessMonitor()
 pdf_generator = PDFGenerator(output_dir="../reports")
 
+# 리포트 디렉토리 경로
+REPORTS_DIR = os.path.join(os.path.dirname(__file__), "..", "reports")
+
 # 모니터링 데이터 저장소
 monitoring_data: Dict[str, List] = {
     "cpu": [],
@@ -114,11 +117,15 @@ class BackgroundMonitor:
                 # 2. 약간 무거운 메트릭 (GPU, Disk - 매초 수집하되 에러 무시)
                 try:
                     gpu = gpu_monitor.get_all()
-                except: gpu = None
-                    
+                except Exception as e:
+                    print(f"GPU monitor error: {e}")
+                    gpu = None
+
                 try:
-                   disk = disk_monitor.get_all()
-                except: disk = None
+                    disk = disk_monitor.get_all()
+                except Exception as e:
+                    print(f"Disk monitor error: {e}")
+                    disk = None
 
                 # 3. 매우 무거운 프로세스 목록 (3초 주기)
                 processes = latest_system_data["processes"]
@@ -184,7 +191,7 @@ app = FastAPI(
 # CORS 설정
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["http://localhost:8000", "http://127.0.0.1:8000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -321,8 +328,12 @@ async def get_monitoring_status():
 async def download_report(filename: str):
     """PDF 리포트 다운로드"""
     # 파일명 검증 (경로 탐색 방지)
-    if ".." in filename or "/" in filename or "\\" in filename:
-         raise HTTPException(status_code=400, detail="Invalid filename")
+    # basename을 사용하여 경로 제거 및 URL 인코딩 우회 방지
+    filename = os.path.basename(filename)
+
+    # PDF 파일만 허용
+    if not filename.endswith('.pdf'):
+        raise HTTPException(status_code=400, detail="Invalid file type")
 
     file_path = os.path.join(REPORTS_DIR, filename)
     if os.path.exists(file_path):
