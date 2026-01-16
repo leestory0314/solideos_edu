@@ -2,6 +2,7 @@ import asyncio
 import json
 import os
 import platform
+import time
 from datetime import datetime
 from typing import List, Dict, Any
 from contextlib import asynccontextmanager
@@ -101,14 +102,32 @@ frontend_path = os.path.join(os.path.dirname(__file__), "..", "frontend")
 if os.path.exists(frontend_path):
     app.mount("/static", StaticFiles(directory=frontend_path), name="static")
 
+# 전역 변수로 마지막 프로세스 업데이트 시간과 캐시 데이터 저장
+last_process_update = 0
+cached_process_data = None
+
 def get_system_data() -> dict:
     """모든 시스템 데이터 수집"""
+    global last_process_update, cached_process_data
+    
+    current_time = time.time()
+    
+    # 기본 메트릭은 매번 수집 (가벼움)
     cpu_data = cpu_monitor.get_all()
     gpu_data = gpu_monitor.get_all()
     memory_data = memory_monitor.get_all()
     disk_data = disk_monitor.get_all()
     network_data = network_monitor.get_all()
-    process_data = process_monitor.get_all(limit=5)
+    
+    # 프로세스 데이터는 3초마다 갱신 (무거움)
+    if current_time - last_process_update >= 3.0 or cached_process_data is None:
+        try:
+            cached_process_data = process_monitor.get_all(limit=5)
+            last_process_update = current_time
+        except Exception:
+            # 에러 발생 시 이전 데이터 유지하거나 빈 값
+            if cached_process_data is None:
+                cached_process_data = {}
     
     return {
         "timestamp": datetime.now().isoformat(),
@@ -117,7 +136,7 @@ def get_system_data() -> dict:
         "memory": memory_data,
         "disk": disk_data,
         "network": network_data,
-        "processes": process_data
+        "processes": cached_process_data
     }
 
 def get_system_info() -> dict:

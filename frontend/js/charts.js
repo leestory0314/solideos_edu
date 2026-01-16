@@ -114,47 +114,53 @@ class ChartManager {
                 intersect: false
             },
             animation: {
-                duration: 300
+                duration: 750,
+                easing: 'linear'
             },
             scales: {
                 x: {
                     display: true,
                     grid: {
-                        color: 'rgba(148, 163, 184, 0.1)',
+                        display: false, // 그리드 최소화
+                        color: 'rgba(148, 163, 184, 0.05)',
                         drawBorder: false
                     },
                     ticks: {
+                        color: 'rgba(148, 163, 184, 0.5)',
                         maxTicksLimit: 10,
-                        font: { size: 10 }
+                        font: { size: 10 },
+                        maxRotation: 0
                     }
                 },
                 y: {
                     display: true,
                     title: {
-                        display: true,
-                        text: yAxisTitle,
-                        font: { size: 11 }
+                        display: false, // 타이틀 제거하여 공간 확보
                     },
                     min: 0,
                     suggestedMax: suggestedMax,
                     grid: {
-                        color: 'rgba(148, 163, 184, 0.1)',
+                        color: 'rgba(148, 163, 184, 0.05)',
                         drawBorder: false
                     },
                     ticks: {
+                        color: 'rgba(148, 163, 184, 0.5)',
                         font: { size: 10 }
                     }
                 }
             },
             plugins: {
                 tooltip: {
-                    backgroundColor: 'rgba(30, 41, 59, 0.95)',
+                    enabled: true,
+                    intersect: false,
+                    mode: 'index',
+                    backgroundColor: 'rgba(15, 23, 42, 0.9)',
                     titleColor: '#F1F5F9',
-                    bodyColor: '#94A3B8',
+                    bodyColor: '#CBD5E1',
                     borderColor: 'rgba(148, 163, 184, 0.2)',
                     borderWidth: 1,
-                    padding: 12,
-                    cornerRadius: 8,
+                    padding: 10,
+                    cornerRadius: 6,
                     displayColors: true,
                     callbacks: {
                         label: function (context) {
@@ -164,9 +170,9 @@ class ChartManager {
                             }
                             if (context.parsed.y !== null) {
                                 label += context.parsed.y.toFixed(1);
-                                if (context.chart.options.scales.y.title.text.includes('%')) {
+                                if (context.chart.options.scales.y.suggestedMax === 100) {
                                     label += '%';
-                                } else if (context.chart.options.scales.y.title.text.includes('KB/s')) {
+                                } else if (!context.chart.options.scales.y.suggestedMax) {
                                     label += ' KB/s';
                                 }
                             }
@@ -191,7 +197,7 @@ class ChartManager {
             chart.data.datasets[0].data.shift();
         }
 
-        chart.update('none');
+        chart.update(); // 애니메이션 적용
     }
 
     updateNetworkChart(uploadSpeed, downloadSpeed, label) {
@@ -209,7 +215,7 @@ class ChartManager {
             chart.data.datasets[1].data.shift();
         }
 
-        chart.update('none');
+        chart.update(); // 애니메이션 적용
     }
 
     resetAllCharts() {
